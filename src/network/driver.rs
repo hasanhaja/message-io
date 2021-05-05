@@ -76,7 +76,13 @@ pub trait ActionController: Send + Sync {
 }
 
 pub trait EventProcessor: Send + Sync {
-    fn process(&self, id: ResourceId, readiness: Readiness, callback: &mut dyn FnMut(NetEvent<'_>));
+    fn process(
+        &self,
+        id: ResourceId,
+        readiness: Readiness,
+        internal_error: bool,
+        callback: &mut dyn FnMut(NetEvent<'_>),
+    );
 }
 
 struct RemoteProperties {
@@ -190,6 +196,7 @@ impl<R: Remote, L: Local<Remote = R>> EventProcessor for Driver<R, L> {
         &self,
         id: ResourceId,
         readiness: Readiness,
+        internal_error: bool,
         event_callback: &mut dyn FnMut(NetEvent<'_>),
     ) {
         match id.resource_type() {
@@ -199,7 +206,7 @@ impl<R: Remote, L: Local<Remote = R>> EventProcessor for Driver<R, L> {
                     log::trace!("Processed remote for {}", endpoint);
 
                     if !remote.properties.is_ready() {
-                        self.process_pending_remote(remote, endpoint, readiness, event_callback);
+                        self.process_pending_remote(remote, endpoint, readiness, internal_error, event_callback);
                     }
                     else {
                         match readiness {
@@ -230,8 +237,16 @@ impl<R: Remote, L: Local<Remote = R>> Driver<R, L> {
         remote: Arc<Register<R, RemoteProperties>>,
         endpoint: Endpoint,
         readiness: Readiness,
+        internal_error: bool,
         mut event_callback: impl FnMut(NetEvent<'_>),
     ) {
+        if readiness == Readiness::Read && internal_error {
+            self.remote_registry.deregister(endpoint.resource_id());
+            if remote.properties.local.is_none() {
+                event_callback(NetEvent::Connected(endpoint, false));
+            }
+        }
+
         match remote.resource.pending(readiness) {
             PendingStatus::Ready => {
                 remote.properties.mark_as_ready();
@@ -244,6 +259,8 @@ impl<R: Remote, L: Local<Remote = R>> Driver<R, L> {
             PendingStatus::Incomplete => (),
             PendingStatus::Disconnected => {
                 self.remote_registry.deregister(endpoint.resource_id());
+
+                // We want only a Connected event if it was created explicitly as a connection
                 if remote.properties.local.is_none() {
                     event_callback(NetEvent::Connected(endpoint, false));
                 }
@@ -288,7 +305,7 @@ impl<R: Remote, L: Local<Remote = R>> Driver<R, L> {
                     // is ready to write.
                     let remote = self.remote_registry.get(remote_id).unwrap();
                     let endpoint = Endpoint::new(remote_id, addr);
-                    self.process_pending_remote(remote, endpoint, Readiness::Write, |net_event| {
+                    self.process_pending_remote(remote, endpoint, Readiness::Write, false, |net_event| {
                         event_callback(net_event)
                     });
                 }

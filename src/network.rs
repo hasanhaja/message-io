@@ -199,9 +199,9 @@ impl NetworkProcessor {
         let processors = &mut self.processors;
         self.poll.process_event(timeout, |poll_event| {
             match poll_event {
-                PollEvent::Network(resource_id, interest) => {
+                PollEvent::Network(resource_id, interest, error) => {
                     let processor = &processors[resource_id.adapter_id() as usize];
-                    processor.process(resource_id, interest, &mut |net_event| {
+                    processor.process(resource_id, interest, error, &mut |net_event| {
                         log::trace!("Processed {:?}", net_event);
                         event_callback(net_event);
                     });

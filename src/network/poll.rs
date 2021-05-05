@@ -19,7 +19,7 @@ pub enum Readiness {
 }
 
 pub enum PollEvent {
-    Network(ResourceId, Readiness),
+    Network(ResourceId, Readiness, bool),
     Waker,
 }
 
@@ -70,13 +70,14 @@ impl Poll {
                         }
                         else {
                             let id = ResourceId::from(mio_event.token());
+                            let has_error = mio_event.is_error();
                             if mio_event.is_readable() {
                                 log::trace!("POLL EVENT (R): {}", id);
-                                event_callback(PollEvent::Network(id, Readiness::Read));
+                                event_callback(PollEvent::Network(id, Readiness::Read, has_error));
                             }
                             if mio_event.is_writable() {
                                 log::trace!("POLL EVENT (W): {}", id);
-                                event_callback(PollEvent::Network(id, Readiness::Write));
+                                event_callback(PollEvent::Network(id, Readiness::Write, has_error));
                             }
                         }
                     }

@@ -84,7 +84,7 @@ impl ActionController for UnimplementedDriver {
 }
 
 impl EventProcessor for UnimplementedDriver {
-    fn process(&self, _: ResourceId, _: Readiness, _: &mut dyn FnMut(NetEvent<'_>)) {
+    fn process(&self, _: ResourceId, _: Readiness, _: bool, _: &mut dyn FnMut(NetEvent<'_>)) {
         panic!("{}", UNIMPLEMENTED_DRIVER_ERR);
     }
 }
